@@ -232,10 +232,11 @@
 </head>
 <body>
     <div class="container">
-        <h1>📧 SOS for YENI</h1>
+        <h1>📧 SOS</h1>
+        <p class="subtitle">Tekan tombol merah jika perlu bantuan</p>
         
         <button class="sos-button" onclick="activateSOS()">
-            📧 SOS
+            📧 SOS<br>DARURAT
         </button>
 
         <div class="email-info">
@@ -249,10 +250,10 @@
                     <span class="loading"></span> Mencari lokasi...
                 </div>
             </div>
-            <div class="location-detail">
+            <!-- <div class="location-detail">
                 <strong>🏠 Alamat:</strong><br>
                 <span id="address">Mendapatkan alamat...</span>
-            </div>
+            </div> -->
             <div class="location-detail">
                 <strong>🕐 Waktu:</strong><br>
                 <span id="timestamp">-</span>
@@ -272,15 +273,14 @@
             </button>
         </div>
 
-        <button id="sendEmailBtn" class="send-email-btn" onclick="sendSOSEmail()" disabled>
-            📧 KIRIM EMAIL SOS
-        </button>
+
 
         <div id="status" class="status hidden"></div>
 
         <div class="footer">
-            <p>⚠️ Email akan dikirim melalui aplikasi email default Anda</p>
+            <p>⚠️ Tombol SOS merah akan langsung mengirim email darurat</p>
             <p>📍 Pastikan GPS aktif untuk akurasi lokasi terbaik</p>
+            <p>📧 Email otomatis dikirim ke: rizkinp87@gmail.com</p>
         </div>
     </div>
 
@@ -295,7 +295,7 @@
         };
 
         function activateSOS() {
-            showStatus('🚨 SOS DIAKTIFKAN! Mempersiapkan email darurat...', 'warning');
+            showStatus('🚨 SOS DIAKTIFKAN! Mengirim email darurat...', 'warning');
             
             // Animasi tombol SOS
             const sosBtn = document.querySelector('.sos-button');
@@ -304,18 +304,128 @@
             // Tampilkan info lokasi
             document.getElementById('locationInfo').classList.remove('hidden');
             
-            // Dapatkan lokasi terbaru
-            getCurrentLocation();
+            // Dapatkan lokasi dan langsung kirim email
+            getCurrentLocationAndSend();
+        }
+
+        function getCurrentLocationAndSend() {
+            updateTimestamp();
             
-            // Auto-enable send button setelah beberapa detik
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                            accuracy: position.coords.accuracy,
+                            timestamp: new Date(position.timestamp)
+                        };
+                        
+                        locationAccuracy = position.coords.accuracy;
+                        
+                        // Update tampilan koordinat
+                        const coords = `${userLocation.lat.toFixed(8)}, ${userLocation.lng.toFixed(8)}`;
+                        document.getElementById('coordinates').innerHTML = coords;
+                        
+                        // Update akurasi
+                        document.getElementById('accuracy').textContent = `±${Math.round(locationAccuracy)} meter`;
+                        
+                        // Update timestamp
+                        updateTimestamp();
+                        
+                        // Coba dapatkan alamat
+                        getAddressFromCoords(userLocation.lat, userLocation.lng);
+                        
+                        // Langsung kirim email SOS
+                        sendSOSEmailDirect();
+                    },
+                    function(error) {
+                        let errorMsg = 'Tidak dapat mengakses lokasi: ';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg += 'Izin lokasi ditolak. Mengirim SOS tanpa lokasi...';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg += 'Lokasi tidak tersedia. Mengirim SOS tanpa lokasi...';
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg += 'Timeout mencari lokasi. Mengirim SOS tanpa lokasi...';
+                                break;
+                        }
+                        document.getElementById('coordinates').innerHTML = errorMsg;
+                        showStatus('⚠️ ' + errorMsg, 'warning');
+                        
+                        // Kirim email SOS meski tanpa lokasi
+                        sendSOSEmailDirect();
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 60000
+                    }
+                );
+            } else {
+                document.getElementById('coordinates').innerHTML = 'Geolocation tidak didukung browser ini';
+                showStatus('⚠️ Browser tidak mendukung geolocation. Mengirim SOS tanpa lokasi...', 'warning');
+                
+                // Kirim email SOS tanpa lokasi
+                sendSOSEmailDirect();
+            }
+        }
+
+        function sendSOSEmailDirect() {
+            showStatus('📧 Mengirim email SOS darurat...', 'warning');
+
+            const timestamp = new Date().toLocaleString('id-ID');
+            let coordinates = 'Lokasi tidak tersedia';
+            let googleMapsUrl = 'Lokasi tidak dapat ditentukan';
+            let accuracy = 'Tidak diketahui';
+
+            if (userLocation) {
+                coordinates = `${userLocation.lat.toFixed(8)}, ${userLocation.lng.toFixed(8)}`;
+                googleMapsUrl = `https://maps.google.com/maps?q=${userLocation.lat},${userLocation.lng}`;
+                accuracy = locationAccuracy ? `±${Math.round(locationAccuracy)} meter` : 'Tidak diketahui';
+            }
+
+            const subject = encodeURIComponent('🆘 SOS DARURAT - Bantuan Diperlukan SEGERA');
+            
+            const body = encodeURIComponent(`🆘 PESAN DARURAT SOS 🆘
+
+SESEORANG MEMBUTUHKAN BANTUAN SEGERA!
+
+📍 INFORMASI LOKASI:
+Koordinat GPS: ${coordinates}
+Akurasi: ${accuracy}
+Waktu: ${timestamp}
+
+🗺️ LINK GOOGLE MAPS:
+${googleMapsUrl}
+
+📱 INSTRUKSI:
+${userLocation ? `1. Klik link Google Maps di atas
+2. Atau salin koordinat GPS: ${coordinates}
+3. Paste di aplikasi maps favorit Anda
+4. Segera hubungi atau datang ke lokasi ini` : `1. Lokasi tidak dapat ditentukan
+2. Silakan hubungi pengirim untuk konfirmasi lokasi
+3. Pesan ini dikirim dalam keadaan darurat`}
+
+⚠️ INI ADALAH PESAN DARURAT OTOMATIS
+Seseorang telah menekan tombol SOS dan membutuhkan bantuan segera.
+
+Pesan dikirim secara otomatis pada: ${timestamp}`);
+
+            const mailtoUrl = `mailto:rizkinp87@gmail.com?subject=${subject}&body=${body}`;
+            
+            // Buka aplikasi email langsung
+            window.location.href = mailtoUrl;
+            
             setTimeout(() => {
-                if (userLocation) {
-                    document.getElementById('sendEmailBtn').disabled = false;
-                    showStatus('✅ Siap mengirim email SOS! Tekan tombol hijau untuk mengirim.', 'success');
-                } else {
-                    showStatus('⚠️ Masih mencari lokasi... Harap tunggu.', 'warning');
-                }
-            }, 3000);
+                showStatus('✅ Email SOS darurat telah dikirim! Bantuan sedang diproses.', 'success');
+                
+                // Reset animasi tombol
+                const sosBtn = document.querySelector('.sos-button');
+                sosBtn.style.animation = 'pulse 2s infinite';
+            }, 1500);
         }
 
         function getCurrentLocation() {
@@ -425,50 +535,8 @@
         }
 
         function sendSOSEmail() {
-            if (!userLocation) {
-                showStatus('⚠️ Lokasi belum tersedia. Mohon tunggu...', 'error');
-                return;
-            }
-
-            showStatus('📧 Menyiapkan email SOS...', 'warning');
-
-            const coordinates = `${userLocation.lat.toFixed(8)}, ${userLocation.lng.toFixed(8)}`;
-            const googleMapsUrl = `https://maps.google.com/maps?q=${userLocation.lat},${userLocation.lng}`;
-            const timestamp = new Date().toLocaleString('id-ID');
-            const accuracy = locationAccuracy ? `±${Math.round(locationAccuracy)} meter` : 'Tidak diketahui';
-
-            const subject = encodeURIComponent('🆘 SOS DARURAT - Bantuan Diperlukan');
-            
-            const body = encodeURIComponent(`🆘 PESAN DARURAT SOS 🆘
-
-Saya membutuhkan bantuan segera!
-
-📍 INFORMASI LOKASI:
-Koordinat GPS: ${coordinates}
-Akurasi: ${accuracy}
-Waktu: ${timestamp}
-
-🗺️ LINK GOOGLE MAPS:
-${googleMapsUrl}
-
-📱 CARA MENEMUKAN SAYA:
-1. Klik link Google Maps di atas
-2. Atau salin koordinat GPS: ${coordinates}
-3. Paste di aplikasi maps favorit Anda
-
-⚠️ MOHON SEGERA HUBUNGI SAYA ATAU DATANG KE LOKASI INI
-
-Pesan ini dikirim secara otomatis dari website SOS.
-Terima kasih.`);
-
-            const mailtoUrl = `mailto:rizkinp87@gmail.com?subject=${subject}&body=${body}`;
-            
-            // Buka aplikasi email
-            window.location.href = mailtoUrl;
-            
-            setTimeout(() => {
-                showStatus('✅ Email SOS telah disiapkan! Mohon kirim melalui aplikasi email Anda.', 'success');
-            }, 1000);
+            // Fungsi ini tidak lagi digunakan karena email dikirim langsung dari tombol SOS
+            sendSOSEmailDirect();
         }
 
         function updateTimestamp() {
